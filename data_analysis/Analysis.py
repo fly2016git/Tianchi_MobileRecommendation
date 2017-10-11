@@ -2,7 +2,7 @@ import pandas as pd
 import timeit
 import os
 import sys
-from data_ananysis.dict_convert_csv import *
+from data_analysis.dict_convert_csv import *
 import matplotlib.pyplot as plt
 
 
@@ -142,6 +142,107 @@ class Analysis:
         plt.grid(True)
         plt.show()
 
+    '''
+    统计12月17号和18号两天中每小时产生的行为量和购买量
+    '''
+    def count_behavior_by_hour(self, userPath):
+        count_hour_1217 = {}
+        count_hour_1218 = {}
+
+        for i in range(24):
+            time_str17 = '2014-12-17 %02.d' % i
+            time_str18 = '2014-12-18 %02.d' % i
+
+            count_hour_1217[time_str17] = [0, 0, 0, 0]
+            count_hour_1218[time_str18] = [0, 0, 0, 0]
+
+        batch = 0
+        dateparse = lambda dates: pd.datetime.strptime(dates, '%Y-%m-%d %H')
+        for df in pd.read_csv(open(userPath, "r"), parse_dates=['time'], index_col=['time'], date_parser=dateparse, chunksize=50000):
+            try:
+                for i in range(24):
+                    time_str17 = '2014-12-17 %02.d' % i
+                    time_str18 = '2014-12-18 %02.d' % i
+                    tmp17 = df[time_str17]['behavior_type'].value_counts()
+                    tmp18 = df[time_str18]['behavior_type'].value_counts()
+
+                    for j in range(len(tmp17)):
+                        count_hour_1217[time_str17][tmp17.index[j] - 1] += tmp17[tmp17.index[j]]
+                    for j in range(len(tmp18)):
+                        count_hour_1218[time_str18][tmp18.index[j] - 1] += tmp18[tmp18.index[j]]
+                batch += 1
+                print('chunk %d done !' % batch)
+            except StopIteration:
+                print("数据处理完成！")
+                break
+
+        df_1217 = pd.DataFrame.from_dict(count_hour_1217, orient='index')
+        df_1218 = pd.DataFrame.from_dict(count_hour_1218, orient='index')
+
+        df_1217.to_csv("../data/count_hour17.csv")
+        df_1218.to_csv("../data/count_hour18.csv")
+
+        df_1217 = pd.read_csv("../data/count_hour17.csv", index_col=0)
+        df_1218 = pd.read_csv("../data/count_hour18.csv", index_col=0)
+        print(df_1217)
+
+        df_1718 = pd.concat([df_1217, df_1218])
+
+        f1 = plt.figure(1)
+        df_1718.plot(kind='bar')
+        plt.legend(loc='best')
+        plt.grid(True)
+        plt.show()
+
+        f2 = plt.figure(2)
+        df_1718['3'].plot(kind='bar', color='r')
+        plt.legend(loc='best')
+        plt.grid(True)
+        plt.show()
+
+    '''
+    用户行为分析
+    '''
+    def user_behavior_analysis(self, userPath):
+        user_list = [10001082,
+                     10496835,
+                     107369933,
+                     108266048,
+                     10827687,
+                     108461135,
+                     110507614,
+                     110939584,
+                     111345634,
+                     111699844]
+
+        user_count = {}
+        for i in range(len(user_list)):
+            user_count[user_list[i]] = [0, 0, 0, 0, 0]
+
+        batch = 0
+        for df in pd.read_csv(open(userPath, 'r'), chunksize=100000, index_col=['user_id']):
+            try:
+                for i in range(10):
+                    tmp = df[df.index == user_list[i]]['behavior_type'].value_counts()
+                    sum_beh = 0
+                    for j in range(len(tmp)):
+                        user_count[user_list[i]][tmp.index[j]-1] += tmp[tmp.index[j]]
+
+                batch += 1
+                print('chunk %d done !' % batch)
+            except StopIteration:
+                print("Iteration is stopped.")
+                break
+
+        for i in range(10):
+            user_count[user_list[i]][4] = user_count[user_list[i]][3] / \
+                                          (user_count[user_list[i]][0] +
+                                           user_count[user_list[i]][1] +
+                                           user_count[user_list[i]][2] +
+                                           user_count[user_list[i]][3])
+
+        df_user_count = pd.DataFrame.from_dict(user_count, orient='index')  # convert dict to dataframe)
+        df_user_count.to_csv("../data/user_count.csv")
 
 if __name__ == '__main__':
     alys = Analysis()
@@ -151,5 +252,4 @@ if __name__ == '__main__':
 
     # alys.time_cost_of_data_loading(userPath)
     # print(alys.CTR(userPath))
-    alys.count_behavior_inP_by_date(userPath, itemPath)
-
+    alys.user_behavior_analysis(userPath)
